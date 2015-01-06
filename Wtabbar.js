@@ -1,139 +1,200 @@
+/*
+ * Wtabbar，简易标签栏jQuery插件
+ * version: 1.1
+ * github: https://github.com/Anginwei/Wtabbar
+ * author: Anginwei
+ * date: 2014.12.31
+ */
 ;
 (function($) {
 	var methods = {
 		init: function(option) {
 			var opt = $.extend({}, {
 				activeClass: "active", // 处于激活状态标签的类名
-				curItem: 0, // 当前标签的索引位置
 				referName: "data-refer", // 多个实例中，关联内容块与标签栏的属性名
-				blockName: "data-name", // 区别不同标签内容的属性名
-				switchMode: "click" // 标签切换模式，"click"或"mouseover"
+				blockName: "data-name", // 每个标签与内容的映射属性名
+				switchMode: "click", // 标签切换模式，"click"或"mouseover"
+				switchAnim: null, // 切换时，标签动画函数，传入当前内容，目标内容，当前标签，目标标签
+				animAuto: true, // 切换时，标签是否自动切换，深度定制切换效果请设置为false
+				autoSwitch: 0 // 自动切换间隔，0为不自动切换，单位秒
 			}, option);
-			return this.each(function(i, elem) {
-				// elem为ul
-				var $this = $(elem),
-					name = opt.referName,
-					value = $this.attr(name),
-					curObj;
-				if (!$this.data("activeClass")) {
-					// 写入配置 + 状态数据
-					$this.data($.extend({}, opt, {
-						tabList: $("li", elem).toArray(), // 标签列表
-						contentList: $("div[" + name + "=" + value + "]>div").toArray() // 与之关联的内容块列表
-					}));
-					// 设定初始显示状态
-					curObj = $($this.data("tabList")[$this.data("curItem")]);
-					curObj.addClass($this.data("activeClass"));
-					$($this.data("contentList")).hide().each(function(i, elem) {
-						var $elem = $(elem);
-						if ($elem.attr($this.data("blockName")) == curObj.text().trim()) {
-							$elem.show();
-							return;
-						}
+
+			return this.each(function() {
+				var $this = $(this), // this->ul
+					data = $.extend({}, opt, {
+						tabList: $("li", this).toArray(), // 标签列表
+						curTab: $("li", this).get(0), // 当前标签
+						contentList: $("div[" + opt.referName + "=" +
+								$this.attr(opt.referName) + "]>div").toArray() // 与之关联的内容块列表
 					});
-					// 绑定事件
-					$this.bind($this.data("switchMode"), function(event) {
-						var target = event.target;
-						if (target.nodeName.toLowerCase() == "li") {
-							methods.switchTab.call(this, target);
+
+				// 写入配置 + 状态数据
+				$this.data("option", data);
+
+				var tabList = data.tabList,
+					contentList = data.contentList,
+					activeClass = data.activeClass,
+					blockName = data.blockName,
+					switchMode = data.switchMode,
+					$curTab = $(data.curTab),
+					blockValue = $curTab.attr(blockName);
+
+				// 设定初始显示状态
+				$curTab.addClass(activeClass);
+				$(contentList).hide().filter("[" + blockName + "=" + blockValue + "]").show();
+
+				// 绑定事件
+				$this.bind(switchMode, function(event) {
+					if (event.target !== this) { // this->ul
+						var target = $(event.target).closest("li", this).get(0);
+
+						methods.switchTab.call($(this), target);
+					}
+				});
+
+				// 设置自动切换
+				if (data.autoSwitch > 0) {
+					(function () {
+						function autoSwitch() {
+						    methods.switchTab.call($this, "next");
+						    setTimeout(autoSwitch, data.autoSwitch*1000);
 						}
-					});
+						setTimeout(autoSwitch, data.autoSwitch*1000);
+					})();
 				}
 			});
 		},
-		/*
-		 * create,remove两个方法可以从外部调用，传入需要删除或添加的标签名
-		 * 如果remove删除的是当前的激活标签，则删除后会隐藏改标签内容块，不移除
+		/* -----------------------------------------------------
+		 * create,remove,switchTab可以从外部调用
 		 */
-		create: function(name) {
-			if (typeof name == "string") {
-				return this.each(function(i, elem) {
-					var $this = $(elem);
-					if (!methods.hasTab.call($this.data("tabList"), name)) {
-						$this.append("<li>" + name + "</li>");
-						methods.update.call(elem);
+
+		/*
+		 * @param {String} newTab 新标签的html字符串
+		 */
+		create: function(newTab) {
+			if (typeof newTab == "string") {
+				return this.each(function() {
+					var $this = $(this), // this->ul
+						opt = $this.data("option"),
+						blockValue = newTab.match(/".*"/)[0].replace(/"/g, "");
+
+					// 不重复创建同名标签
+					if (methods.hasTab(opt, blockValue) == -1) {
+						$this.append(newTab);
+						// 更新标签列表
+						methods.changeOption($this, "tabList", $("li", this).toArray());
+						methods.switchTab.call($this, opt.tabList[opt.tabList.length - 1]);
 					}
 				});
 			} else {
 				throw new Error("Wtabbar.create参数类型有误");
 			}
 		},
-		remove: function(name) {
-		    if (typeof name == "string") {
-		    	return this.each(function (i, elem) {
-		    		var $this = $(elem),
-		    		    tlist = $this.data("tabList"),
-		    		    clist = $this.data("contentList"),
-		    		    curItem = $this.data("curItem");
-		    		if (methods.hasTab.call($this.data("tabList"), name)) {
-		    		    // 遍历列表
-                        tlist.forEach(function (item, i) {
-                            if (item.innerHTML.indexOf(name) != -1) {
-                                elem.removeChild(item);
-                                // 要删除的标签为当前激活标签，则移除后要隐藏内容
-                                if (curItem == i) {
-                                    clist[i].style.display = "none";
-                                }
-                            }
-        		    	    methods.update.call(elem);
-                        });
-		    		}
-		    	});
-		    } else {
-		        throw new Error("Wtabbar.remove参数类型有误");
-		    }
-		},
+
 		/*
-		 * 内部方法，以下方法仅仅操作一个元素
+		 * @param {String} blockValue 要删除标签的关联属性值
 		 */
-		// 更新标签列表
-		update: function() {
-			$(this).data("tabList", $("li", this).toArray());
-		},
-		// 切换标签
-		switchTab: function(target) {
-			var targetIndex, // 目标元素位于列表中的位置
-				$this = $(this),
-				tabList = $this.data("tabList"),
-				contentList = $this.data("contentList"),
-				cur = $this.data("curItem");
-			// 确定targetIndex
-			tabList.forEach(function(elem, i) {
-				if (elem.isSameNode(target)) {
-					targetIndex = i;
-				}
-			});
-			if (cur != targetIndex) {
-				// 切换标签
-				$(tabList[cur]).toggleClass("active");
-				$this.data("curItem", targetIndex);
-				$(tabList[targetIndex]).toggleClass("active");
-				// 切换内容
-				$(contentList).hide().each(function(i, elem) {
-					var $elem = $(elem);
-					if ($elem.attr($this.data("blockName")) == $(target).text().trim()) {
-						$elem.show();
-						return;
+		remove: function(blockValue) {
+			if (typeof blockValue == "string") {
+				return this.each(function() {
+					var $this = $(this), // this->ul
+						opt = $this.data("option"),
+						targetIndex = methods.hasTab(opt, blockValue);
+
+					// 目标标签存在才执行删除操作
+					if (targetIndex != -1) {
+						// 删除当前标签，先切换再移除
+						if (opt.tabList[targetIndex] === opt.curTab) {
+							opt.tabList.length ? methods.switchTab.call($this, opt.tabList[0]) :
+								$(opt.contentList).filter("[" + opt.blockName + "=" + blockValue + "]").hide();
+						}
+						$(opt.tabList[targetIndex]).remove();
+						// 更新标签列表
+						methods.changeOption($this, "tabList", $("li", this).toArray());
 					}
 				});
+			} else {
+				throw new Error("Wtabbar.remove参数类型有误");
 			}
 		},
-		// this=tabList[]
-		hasTab: function(name) {
-			var flag = false;
-			this.forEach(function(elem) {
-				if ($(elem).text().trim() == name) {
-					flag = true;
+		/*
+		 * @param {Element|String} target 目标li元素或"previous" || "next"
+		 */
+		switchTab: function(target) {
+			return this.each(function() {
+				var $this = $(this), // this->ul
+					opt = $this.data("option");
+				// 确定目标
+				target =
+					target === "previous" && methods.loopSearch(opt, "previous") ||
+					target === "next" && methods.loopSearch(opt, "next") || target;
+				if (target.nodeName.toLowerCase() !== "li") {
+					throw new Error("Wtabbar.switchTab参数有误");
+				}
+
+				var $curTab = $(opt.curTab),
+					$target = $(target),
+					$curCon = $(opt.contentList).filter("[" + opt.blockName + "=" +
+						$curTab.attr(opt.blockName) + "]"),
+					$tarCon = $(opt.contentList).filter("[" + opt.blockName + "=" +
+						$target.attr(opt.blockName) + "]"),
+					animArg = [$curCon.get(0), $tarCon.get(0), opt.curTab, target];
+
+
+				// 跳过点击当前已激活的标签
+				if (opt.curTab !== target) {
+					if (opt.animAuto) {
+						$curTab.toggleClass(opt.activeClass);
+						$target.toggleClass(opt.activeClass);
+					}
+					if (typeof opt.switchAnim === "function") {
+						opt.switchAnim.apply(this, animArg);
+					} else {
+						$curCon.toggle();
+						$tarCon.toggle();
+					}
+					// 修改位置
+					methods.changeOption($this, "curTab", target);
+				}
+			});
+		},
+		/* -----------------------------------------------------
+		 * 内部方法
+		 */
+
+		changeOption: function($this, name, value) {
+			var opt = $this.data("option");
+			opt[name] = value;
+			$this.data("option", opt);
+		},
+
+		loopSearch: function(opt, dir) {
+			var curIndex = $(opt.curTab).index(),
+				target = null;
+
+			dir === "previous" && curIndex-- ||
+				dir === "next" && curIndex++;
+			target = curIndex < 0 && opt.tabList[opt.tabList.length - 1] ||
+				opt.tabList[curIndex % opt.tabList.length];
+			return target;
+		},
+
+		hasTab: function(opt, name) {
+			var index = -1;
+			opt.tabList.forEach(function(li, i) {
+				if ($(li).attr(opt.blockName) == name) {
+					index = i;
 					return;
 				}
 			});
-			return flag;
+			return index;
 		}
-	}; //end of object methods
+	}; // object methods
+
 	$.fn.extend({
 		/*
 		 * 若传入方法名，则调用该方法，后面要跟方法参数
-		 * 若传入配置，则初始化插件
+		 * 若传入配置或留空参数，则初始化插件
 		 */
 		Wtabbar: function(method) {
 			if (this.length == 0) {
