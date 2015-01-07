@@ -15,7 +15,7 @@
 				blockName: "data-name", // 每个标签与内容的映射属性名
 				switchMode: "click", // 标签切换模式，"click"或"mouseover"
 				switchAnim: null, // 切换时，标签动画函数，传入当前内容，目标内容，当前标签，目标标签
-				tabAuto: true, // 切换时，标签是否自动切换，深度定制切换效果请设置为false
+				autoTab: true, // 切换时，标签是否自动切换，深度定制切换效果请设置为false
 				autoSwitch: 0 // 自动切换间隔，0为不自动切换，单位秒
 			}, option);
 
@@ -143,7 +143,7 @@
 
 				// 跳过点击当前已激活的标签
 				if (opt.curTab !== target) {
-					if (opt.tabAuto) {
+					if (opt.autoTab) {
 						$curTab.toggleClass(opt.activeClass);
 						$target.toggleClass(opt.activeClass);
 					}
