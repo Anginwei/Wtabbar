@@ -46,20 +46,23 @@
 				// 绑定事件
 				$this.bind(switchMode, function(event) {
 					if (event.target !== this) { // this->ul
-						var target = $(event.target).closest("li", this).get(0);
+						var target = $(event.target).closest("li", this).get(0) || "not li";
 
+                        if (target === "not li") {
+                        	return;
+                        }
 						methods.switchTab.call($(this), target);
 					}
 				});
 
 				// 设置自动切换
 				if (data.autoSwitch > 0) {
-					(function () {
+					(function() {
 						function autoSwitch() {
-						    methods.switchTab.call($this, "next");
-						    setTimeout(autoSwitch, data.autoSwitch*1000);
+							methods.switchTab.call($this, "next");
+							setTimeout(autoSwitch, data.autoSwitch * 1000);
 						}
-						setTimeout(autoSwitch, data.autoSwitch*1000);
+						setTimeout(autoSwitch, data.autoSwitch * 1000);
 					})();
 				}
 			});
@@ -82,7 +85,7 @@
 					if (methods.hasTab(opt, blockValue) == -1) {
 						$this.append(newTab);
 						// 更新标签列表
-						methods.changeOption($this, "tabList", $("li", this).toArray());
+						methods.changeOption.call(this, "tabList", $("li", this).toArray());
 						methods.switchTab.call($this, opt.tabList[opt.tabList.length - 1]);
 					}
 				});
@@ -110,7 +113,7 @@
 						}
 						$(opt.tabList[targetIndex]).remove();
 						// 更新标签列表
-						methods.changeOption($this, "tabList", $("li", this).toArray());
+						methods.changeOption.call(this, "tabList", $("li", this).toArray());
 					}
 				});
 			} else {
@@ -118,7 +121,7 @@
 			}
 		},
 		/*
-		 * @param {Element|String} target 目标li元素或"previous" || "next"
+		 * @param {Element|String} target 目标li元素或"prev" || "next"
 		 */
 		switchTab: function(target) {
 			return this.each(function() {
@@ -126,7 +129,7 @@
 					opt = $this.data("option");
 				// 确定目标
 				target =
-					target === "previous" && methods.loopSearch(opt, "previous") ||
+					target === "prev" && methods.loopSearch(opt, "prev") ||
 					target === "next" && methods.loopSearch(opt, "next") || target;
 				if (target.nodeName.toLowerCase() !== "li") {
 					throw new Error("Wtabbar.switchTab参数有误");
@@ -134,12 +137,22 @@
 
 				var $curTab = $(opt.curTab),
 					$target = $(target),
+					curBlockValue = $curTab.attr(opt.blockName),
+					tarBlockValue = $target.attr(opt.blockName),
 					$curCon = $(opt.contentList).filter("[" + opt.blockName + "=" +
-						$curTab.attr(opt.blockName) + "]"),
+						curBlockValue + "]"),
 					$tarCon = $(opt.contentList).filter("[" + opt.blockName + "=" +
-						$target.attr(opt.blockName) + "]"),
-					animArg = [$curCon.get(0), $tarCon.get(0), opt.curTab, target];
-
+						tarBlockValue + "]"),
+				    i = methods.hasTab(opt, curBlockValue),
+				    j = methods.hasTab(opt, tarBlockValue),
+					animArg = {
+						curCon: $curCon.get(0),
+						curTab: opt.curTab,
+						tarCon: $tarCon.get(0),
+						tarTab: target,
+						i: i,
+						j: j
+					};
 
 				// 跳过点击当前已激活的标签
 				if (opt.curTab !== target) {
@@ -148,41 +161,42 @@
 						$target.toggleClass(opt.activeClass);
 					}
 					if (typeof opt.switchAnim === "function") {
-						opt.switchAnim.apply(this, animArg);
+						opt.switchAnim.call(this, animArg);
 					} else {
 						$curCon.toggle();
 						$tarCon.toggle();
 					}
 					// 修改位置
-					methods.changeOption($this, "curTab", target);
+					methods.changeOption.call(this, "curTab", target);
 				}
 			});
 		},
 		/* -----------------------------------------------------
 		 * 内部方法
 		 */
-
-		changeOption: function($this, name, value) {
-			var opt = $this.data("option");
+        // 修改设置
+		changeOption: function(name, value) {
+			var $this = $(this),
+			    opt = $this.data("option");
 			opt[name] = value;
 			$this.data("option", opt);
 		},
-
+        // 循环查找
 		loopSearch: function(opt, dir) {
 			var curIndex = $(opt.curTab).index(),
 				target = null;
 
-			dir === "previous" && curIndex-- ||
+			dir === "prev" && curIndex-- ||
 				dir === "next" && curIndex++;
 			target = curIndex < 0 && opt.tabList[opt.tabList.length - 1] ||
 				opt.tabList[curIndex % opt.tabList.length];
 			return target;
 		},
-
-		hasTab: function(opt, name) {
+        // 搜索标签，找到则返回index，否则返回-1
+		hasTab: function(opt, blockValue) {
 			var index = -1;
 			opt.tabList.forEach(function(li, i) {
-				if ($(li).attr(opt.blockName) == name) {
+				if ($(li).attr(opt.blockName) == blockValue) {
 					index = i;
 					return;
 				}
